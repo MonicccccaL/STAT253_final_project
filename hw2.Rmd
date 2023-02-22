@@ -1,0 +1,258 @@
+# Project Work
+
+```{r}
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(broom)
+library(tidymodels)
+tidymodels_prefer()
+
+accident <- read.csv("/Users/lixiang/Desktop/Spring\ 2023/STAT\ 253/project/US_Accidents_Dec21_updated.csv")
+```
+
+```{r}
+accident <- select(accident, -Start_Time, -End_Time, -Start_Lat, -Start_Lng, -End_Lat, -
+                    End_Lng, -ID, -Number, -Zipcode, -County, -City, -Timezone, -Airport_Code, -Country)
+accident_filter<- na.omit(accident)
+accident_filter <- select(accident_filter,-Description, -Street, - Weather_Timestamp, -Wind_Direction, -Turning_Loop,-Traffic_Calming,-Roundabout,-Bump,-No_Exit,-Give_Way,-Precipitation.in.)
+```
+
+## Initial investigation 1: ignoring nonlinearity (for now)
+
+Use ordinary least squares (OLS) regression, forward and/or backward selection, and LASSO to build initial models for your quantitative outcome as a function of the predictors of interest. (As part of data cleaning, exclude any variables that you don't want to consider as predictors.)
+
+- These models should not include any transformations to deal with nonlinearity. You'll explore this in the next investigation.
+- Note: If you have highly collinear/redundant variables, you might see the message "Reordering variables and trying again" and associated `warning()`s about linear dependencies being found. Sometimes stepwise selection is able to handle the collinearity/redundancy by modifying the order of the variables tried. If collinearity/redundancy cannot be handled and causes an error, try reducing `nvmax`.
+
+```{r}
+set.seed(253)
+acc_rand <- sample_n(accident_filter, 5000)
+acc_rand <- select(acc_rand, -Astronomical_Twilight, -Nautical_Twilight)
+ggplot(acc_rand, aes(x=Severity)) +
+    geom_histogram()
+#OLS
+lm_spec <-
+    linear_reg() %>% 
+    set_engine(engine = 'lm') %>% 
+    set_mode('regression')
+
+full_rec <- recipe(Severity ~ ., data = acc_rand) %>%
+    step_nzv(all_predictors()) %>% # removes variables with the same value
+    step_normalize(all_numeric_predictors()) %>% # important standardization step for LASSO
+    step_dummy(all_nominal_predictors())  # creates indicator variables for categorical variables
+
+full_lm_wf <- workflow() %>%
+    add_recipe(full_rec) %>%
+    add_model(lm_spec)
+    
+full_model <- fit(full_lm_wf, data = acc_rand) 
+full_model %>% tidy()
+```
+
+```{r}
+#backward
+lm_spec <-
+    linear_reg() %>% 
+    set_engine(engine = "lm") %>% 
+    set_mode("regression")
+full_model <- fit(lm_spec,
+                  Severity ~ .-State-Civil_Twilight-Weather_Condition, 
+                  data = acc_rand)
+backward <- step(full_model, direction = "backward")
+summary(backward)
+```
+
+```{r}
+#LASSO
+# Create CV folds
+data_cv10 <- vfold_cv(acc_rand, v = 10)
+
+# Lasso Model Spec with tune
+lm_lasso_spec_tune <- 
+  linear_reg() %>%
+  set_args(mixture = 1, penalty = tune()) %>% ## mixture = 1 indicates Lasso
+  set_engine(engine = 'glmnet') %>% #note we are using a different engine
+  set_mode('regression') 
+
+# Workflow (Recipe + Model)
+lasso_wf_tune <- workflow() %>% 
+  add_recipe(full_rec) %>% # recipe defined above
+  add_model(lm_lasso_spec_tune) 
+
+# Tune Model (trying a variety of values of Lambda penalty)
+penalty_grid <- grid_regular(
+  penalty(range = c(0, -3)), #log10 transformed (e.g., put '-3' for 0.001) 
+  levels = 30)
+
+tune_output <- tune_grid( # new function for tuning parameters
+  lasso_wf_tune, # workflow
+  resamples = data_cv10, # cv folds
+  metrics = metric_set(rmse, mae),
+  grid = penalty_grid # penalty grid defined above
+)
+best_penalty <- select_best(tune_output, metric = 'mae')
+final_wf <- finalize_workflow(lasso_wf_tune, best_penalty)
+final_fit <- fit(final_wf, data = acc_rand)
+tidy(final_fit)
+```
+
+**PUT ANY RELEVANT TEXT/RESPONSES/INTERPRETATIONS HERE**
+
+
+\\
+
+
+Estimate test performance of the models from these different methods. Report and interpret (with units) these estimates along with a measure of uncertainty in the estimate (SD is most readily available from `caret`).
+
+- Compare estimated test performance across methods. Which method(s) might you prefer?
+
+
+```{r}
+# Your code
+```
+
+**PUT ANY RELEVANT TEXT/RESPONSES/INTERPRETATIONS HERE**
+
+
+\\
+
+
+Use residual plots to evaluate whether some quantitative predictors might be better modeled with nonlinear relationships.
+
+```{r}
+# Your code
+```
+
+**PUT ANY RELEVANT TEXT/RESPONSES/INTERPRETATIONS HERE**
+
+
+\\
+
+Compare insights from variable importance analyses from the different methods (stepwise and LASSO, but not OLS). Are there variables for which the methods reach consensus? What insights are expected? Surprising?
+
+- Note that if some (but not all) of the indicator terms for a categorical predictor are selected in the final models, the whole predictor should be treated as selected.
+
+```{r}
+# Your code
+```
+
+**PUT ANY RELEVANT TEXT/RESPONSES/INTERPRETATIONS HERE**
+
+
+\\
+
+
+## Investigation 2: Accounting for nonlinearity
+
+Update your stepwise selection model(s) and LASSO model to use natural splines for the quantitative predictors.
+
+- You'll need to update the model formula from `y ~ .` to something like `y ~ cat_var1 + ns(quant_var1, df) + ...`.
+- It's recommended to use few knots (e.g., 2 knots = 3 degrees of freedom).
+- Note that `ns(x,3)` replaces `x` with 3 transformations of `x`. Keep this in mind when setting `nvmax` in stepwise selection.
+
+```{r}
+# Your code
+```
+
+**PUT ANY RELEVANT TEXT/RESPONSES/INTERPRETATIONS HERE**
+
+
+\\
+
+
+Compare insights from variable importance analyses here and the corresponding results from Investigation 1. Now after having accounted for nonlinearity, have the most relevant predictors changed?
+
+- Note that if some (but not all) of the spline terms are selected in the final models, the whole predictor should be treated as selected.
+
+```{r}
+# Your code
+```
+
+**PUT ANY RELEVANT TEXT/RESPONSES/INTERPRETATIONS HERE**
+
+
+\\
+
+
+Fit a GAM using LOESS terms using the set of variables deemed to be most relevant based on your investigations so far.
+
+- How does test performance of the GAM compare to other models you explored?
+- Do you gain any insights from the GAM output plots for each predictor?
+
+```{r}
+# Your code
+```
+
+**PUT ANY RELEVANT TEXT/RESPONSES/INTERPRETATIONS HERE**
+
+
+\\
+
+
+## Summarize investigations
+
+Decide on an overall best model based on your investigations so far. To do this, make clear your analysis goals. Predictive accuracy? Interpretability? A combination of both?
+
+
+\\
+
+
+## Societal impact
+
+Are there any harms that may come from your analyses and/or how the data were collected? What cautions do you want to keep in mind when communicating your work?
+
+
+
+\\\\
+
+
+
+# Portfolio Work
+
+Link to Portfolio Google Doc: PASTE LINK HERE
+
+
+
+\\\\
+
+
+
+# Course Engagement
+
+Delete sections below that you don't apply to you.
+
+\
+
+**Ethics: (REQUIRED)** Read the article [Automated background checks are deciding who’s fit for a home](https://www.theverge.com/platform/amp/2019/2/1/18205174/automation-background-check-criminal-records-corelogic). Write a short (roughly 250 words), thoughtful response about the ideas that the article brings forth. What themes recur from last week's article (on an old Amazon recruiting tool)? What aspects are more particular to the context of equity in housing access?
+
+**Response:** YOUR RESPONSE
+
+
+\\
+
+
+**Reflection:** Write a short, thoughtful reflection about how things went this week. Feel free to use whichever prompts below resonate most with you, but don't feel limited to these prompts.
+
+- How are class-related things going? Is there anything that you need from the instructor? What new strategies for watching videos, reading, reviewing, gaining insights from class work have you tried or would like to try?
+- How is group work going? Did you try out any new collaboration strategies with your new group? How did they go?
+- How is your work/life balance going? Did you try out any new activities or strategies for staying well? How did they go?
+
+**Response:** YOUR RESPONSE
+
+
+\\
+
+
+**Note-taking:** PUT LINK TO NOTES HERE
+
+
+\\
+
+
+**Q & A:** In one short paragraph, summarize your engagement in at least 2 of the 3 following areas: (1) preceptor / instructor office hours, (2) on Slack, (3) in small groups during synchronous class sessions.
+
+**Response:** YOUR RESPONSE
+
+
+
