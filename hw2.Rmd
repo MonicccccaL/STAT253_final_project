@@ -28,7 +28,7 @@ Use ordinary least squares (OLS) regression, forward and/or backward selection, 
 ```{r}
 set.seed(253)
 acc_rand <- sample_n(accident_filter, 5000)
-acc_rand <- select(acc_rand, -Astronomical_Twilight, -Nautical_Twilight)
+acc_rand <- select(acc_rand, -Astronomical_Twilight, -Nautical_Twilight, -State, -Civil_Twilight, -Weather_Condition)
 ggplot(acc_rand, aes(x=Severity)) +
     geom_histogram()
 #OLS
