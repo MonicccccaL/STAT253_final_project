@@ -93,7 +93,7 @@ tune_output <- tune_grid(
 
 autoplot(tune_output) + theme_classic()
 ```
-```
+
 
 **PUT ANY RELEVANT TEXT/RESPONSES/INTERPRETATIONS HERE**
 
@@ -107,7 +107,7 @@ Estimate test performance of the models from these different methods. Report and
 
 
 ```{r}
-# Your code
+
 ```
 
 **PUT ANY RELEVANT TEXT/RESPONSES/INTERPRETATIONS HERE**
@@ -119,7 +119,7 @@ Estimate test performance of the models from these different methods. Report and
 Use residual plots to evaluate whether some quantitative predictors might be better modeled with nonlinear relationships.
 
 ```{r}
-# Your code
+
 ```
 
 **PUT ANY RELEVANT TEXT/RESPONSES/INTERPRETATIONS HERE**
