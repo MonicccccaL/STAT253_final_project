@@ -52,36 +52,47 @@ full_model %>% tidy()
 
 ```{r}
 #LASSO
-# Create CV folds
-data_cv10 <- vfold_cv(acc_rand, v = 10)
+data_cv10 <- vfold_cv(acc_rand,v = 10)
+
+# model spec
+lm_spec <- 
+  linear_reg() %>%
+  set_engine(engine = 'lm') %>%
+  set_mode('regression')
+
+full_rec <- recipe(Severity ~., data = acc_rand) %>%
+    step_nzv(all_predictors()) %>% # removes variables with the same value
+    step_normalize(all_numeric_predictors()) %>% # important standardization step for LASSO
+    step_corr(all_numeric())%>%
+    step_dummy(all_nominal_predictors())  # creates indicator variables for categorical variables
 
 # Lasso Model Spec with tune
 lm_lasso_spec_tune <- 
   linear_reg() %>%
   set_args(mixture = 1, penalty = tune()) %>% ## mixture = 1 indicates Lasso
-  set_engine(engine = 'glmnet') %>% #note we are using a different engine
-  set_mode('regression') 
+  set_engine(engine = 'glmnet') %>% 
+  set_mode('regression')  
 
-# Workflow (Recipe + Model)
+# Recipes & Workflows
 lasso_wf_tune <- workflow() %>% 
-  add_recipe(full_rec) %>% # recipe defined above
+  add_recipe(full_rec) %>%
   add_model(lm_lasso_spec_tune) 
 
 # Tune Model (trying a variety of values of Lambda penalty)
 penalty_grid <- grid_regular(
-  penalty(range = c(0, -3)), #log10 transformed (e.g., put '-3' for 0.001) 
+  penalty(range = c(-3, 1)), 
   levels = 30)
 
-tune_output <- tune_grid( # new function for tuning parameters
-  lasso_wf_tune, # workflow
-  resamples = data_cv10, # cv folds
+# takes a long time to run
+tune_output <- tune_grid( 
+  lasso_wf_tune, 
+  resamples = data_cv10, 
   metrics = metric_set(rmse, mae),
-  grid = penalty_grid # penalty grid defined above
+  grid = penalty_grid 
 )
-best_penalty <- select_best(tune_output, metric = 'mae')
-final_wf <- finalize_workflow(lasso_wf_tune, best_penalty)
-final_fit <- fit(final_wf, data = acc_rand)
-tidy(final_fit)
+
+autoplot(tune_output) + theme_classic()
+```
 ```
 
 **PUT ANY RELEVANT TEXT/RESPONSES/INTERPRETATIONS HERE**
