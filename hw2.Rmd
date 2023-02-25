@@ -51,19 +51,6 @@ full_model %>% tidy()
 ```
 
 ```{r}
-#backward
-lm_spec <-
-    linear_reg() %>% 
-    set_engine(engine = "lm") %>% 
-    set_mode("regression")
-full_model <- fit(lm_spec,
-                  Severity ~ .-State-Civil_Twilight-Weather_Condition, 
-                  data = acc_rand)
-backward <- step(full_model, direction = "backward")
-summary(backward)
-```
-
-```{r}
 #LASSO
 # Create CV folds
 data_cv10 <- vfold_cv(acc_rand, v = 10)
